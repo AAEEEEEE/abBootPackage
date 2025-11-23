@@ -1,0 +1,136 @@
+---
+title: "Bootstrap Confidence Intervals for A/B Testing"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Bootstrap Confidence Intervals for A/B Testing}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+library(abBootPackage)
+library(ggplot2)
+set.seed(123)
+```
+
+## Introduction
+
+A/B testing is a common way to compare two versions of a website, app screen, advertisement, or product feature.  
+For example, Version A might use a blue button and Version B might use a red button. We want to know which version gets more clicks.
+
+In an A/B test:
+
+- Group A sees Version A  
+- Group B sees Version B  
+- Each user either converts (1) or does not convert (0)
+
+We estimate the conversion rates:
+
+\[
+p_A = \frac{y_A}{n_A}, \quad
+p_B = \frac{y_B}{n_B}, \quad
+\Delta = p_B - p_A.
+\]
+
+Because we only observe a sample of users, the difference \(\Delta\) has uncertainty.  
+This vignette shows how to use the **abBootPackage** to compute bootstrap confidence intervals for \(\Delta\) using several methods (percentile, basic, bootstrap-t, and BCa fallback).
+
+## Example Data
+
+We consider the following example:
+
+Version A: 70 conversions out of 1000 users
+
+Version B: 95 conversions out of 1000 users
+```{r}
+nA <- 1000; yA <- 70
+nB <- 1000; yB <- 95
+```
+
+### Percentile Bootstrap CI
+
+The percentile method uses the quantiles of the bootstrap sampling distribution directly.
+```{r}
+res_perc <- boot_ab_perc(nA, yA, nB, yB, B = 2000)
+res_perc
+```
+
+### Basic Bootstrap CI
+
+The basic CI reflects the bootstrap distribution around the point estimate:
+```{r}
+res_basic <- boot_ab_basic(nA, yA, nB, yB, B = 2000)
+res_basic
+```
+
+### Bootstrap-t CI
+
+Bootstrap-t uses the studentized statistic:
+
+$$
+t^* = \frac{\theta^* - \hat{\theta}}{\widehat{SE}^*}.
+$$
+
+```{r}
+res_t <- boot_ab_t(nA, yA, nB, yB, B = 2000)
+res_t
+```
+
+## Comparison of Methods
+
+We collect all three intervals in a single matrix:
+
+```{r}
+ci_matrix <- rbind(
+Percentile = res_perc$ci,
+Basic      = res_basic$ci,
+T          = res_t$ci
+)
+ci_matrix
+```
+Each row corresponds to a method, and the two columns are the lower and upper endpoints of the 95% CI for $\Delta = p_B - p_A$.
+
+### Visualization
+
+```{r}
+df <- data.frame(
+Method = rownames(ci_matrix),
+Lower  = ci_matrix[, 1],
+Upper  = ci_matrix[, 2]
+)
+
+ggplot(df, aes(x = Method, ymin = Lower, ymax = Upper)) +
+geom_errorbar(width = 0.15) +
+geom_point(aes(y = (Lower + Upper)/2), size = 3, color = "blue") +
+labs(title = "Bootstrap Confidence Intervals for A/B Test Difference",
+x = "Method",
+y = "95% CI for pB - pA") +
+theme_minimal()
+```
+
+The plot displays each CI as a vertical line with a point at the midpoint.
+
+## Interpretation
+
+In this example:
+
+- The estimated difference in conversion rates is  
+  $\hat{\Delta} = \hat{p}_B - \hat{p}_A = `r round(res_perc$diff, 3)`$.
+- The percentile interval includes zero, so the improvement is not statistically convincing.
+- The basic and bootstrap-t intervals are slightly different because each method adjusts for variability in a different way.
+
+Overall, the three methods give similar results, but the exact interval can vary depending on the bootstrap procedure.
+
+## Conclusion
+
+In this vignette, we used the **abBootPackage** to compare three different bootstrap confidence interval methods for A/B testing:
+
+- Percentile bootstrap CI  
+- Basic bootstrap CI  
+- Bootstrap-t CI  
+
+We showed how to enter A/B testing data, how to run each bootstrap method, and how to compare and interpret the results.
+
+Although the three methods give similar results, they can differ depending on the bootstrap distribution and estimated variability. In practice, different methods may lead to slightly different conclusions.
+
+The package could be extended in the future to support larger studies, other confidence levels, or additional statistics.
